@@ -8,7 +8,13 @@
     "wp-env:stop": "wp-env stop",
     "wp-env:clean": "wp-env clean",
     "wp-env:reset": "wp-env clean && wp-env start",
-    "test:wordpress": "playwright test tests/wordpress.spec.js"
+    "test:wordpress": "playwright test tests/wordpress.spec.js",
+    "test:ci": "playwright test --reporter=github",
+    "test:ci:basic": "playwright test tests/example.spec.js tests/web-operations-test.spec.js --reporter=github",
+    "test:ci:wordpress": "playwright test tests/wordpress*.spec.js --project=wordpress-e2e --reporter=github",
+    "ci:setup": "npm ci && npx playwright install --with-deps",
+    "ci:wp-setup": "npm run wp-env:start && timeout 180 sh -c 'until curl -s http://localhost:8080; do sleep 2; done'",
+    "ci:wp-teardown": "npm run wp-env:stop"
   },
   "author": "fumikito <ftakahashi@tarosky.co.jp>",
   "license": "GPL-3.0-and-later",

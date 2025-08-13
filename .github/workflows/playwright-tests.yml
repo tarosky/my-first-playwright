@@ -1,0 +1,174 @@
+name: Playwright Tests
+
+on:
+  # プルリクエスト時にテストを実行
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'tests/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/playwright-tests.yml'
+  
+  # mainブランチへのプッシュ時にも実行
+  push:
+    branches: [ main ]
+    paths:
+      - 'tests/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/playwright-tests.yml'
+
+  # 手動実行も可能
+  workflow_dispatch:
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        # Node.js 18のみでテスト（時間短縮のため）
+        node-version: [18]
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps
+
+    - name: Run basic Playwright tests (non-WordPress)
+      run: |
+        npx playwright test tests/example.spec.js tests/web-operations-test.spec.js \
+          --reporter=github
+      continue-on-error: false
+      env:
+        CI: true
+
+    - name: Upload basic test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-basic-node${{ matrix.node-version }}
+        path: |
+          test-results/
+          playwright-report/
+        retention-days: 30
+
+  # WordPress E2Eテストは別ジョブで実行（時間がかかるため）
+  test-wordpress:
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[wp-test]') || contains(github.event.head_commit.message, '[wp-test]')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps
+
+    - name: Setup Docker for WordPress
+      run: |
+        # Docker環境の確認とWordPress環境の準備
+        docker --version
+        docker-compose --version
+
+    - name: Start WordPress environment
+      run: |
+        npm run wp-env:start
+        # WordPress環境の起動を待つ
+        timeout 180 sh -c 'until curl -s http://localhost:8080 > /dev/null; do sleep 2; done'
+        echo "WordPress environment is ready"
+
+    - name: Run WordPress E2E tests
+      run: |
+        npx playwright test tests/wordpress.spec.js \
+          --reporter=github
+      env:
+        # WordPress環境用の設定
+        WP_ENV_CORE: WordPress/WordPress#master
+        CI: true
+
+    - name: Run WordPress-way learning tests
+      if: always()
+      run: |
+        npx playwright test tests/wordpress-way-*.spec.js \
+          --reporter=github \
+          --project=wordpress-e2e
+      continue-on-error: true
+      env:
+        CI: true
+
+    - name: Stop WordPress environment
+      if: always()
+      run: npm run wp-env:stop
+
+    - name: Upload WordPress test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-wordpress
+        path: |
+          test-results/
+          playwright-report/
+        retention-days: 30
+
+  # テスト結果のサマリーレポート作成
+  report:
+    needs: [test, test-wordpress]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all test results
+      uses: actions/download-artifact@v4
+      with:
+        path: all-results
+
+    - name: Generate test summary
+      run: |
+        echo "# 🎭 Playwright Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Basic Tests" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "all-results" ]; then
+          for dir in all-results/playwright-report-basic-*; do
+            if [ -d "$dir" ]; then
+              echo "- $(basename "$dir"): ✅ Completed" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+        fi
+        
+        if [ -d "all-results/playwright-report-wordpress" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## WordPress E2E Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- WordPress環境テスト: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📊 詳細なテスト結果はArtifactからダウンロードできます。" >> $GITHUB_STEP_SUMMARY

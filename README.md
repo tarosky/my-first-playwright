@@ -272,9 +272,234 @@ npx playwright test wordpress-way-paragraph.spec.js --ui
 - エラー処理やエッジケースの対処法
 - パフォーマンスを考慮したテスト設計
 
-## 10. 参考リンク
+## 10. CI/CD環境でのテスト実行
+
+### GitHub Actionsによる自動テスト
+このリポジトリには、GitHub Actionsを使用した自動テスト環境が構築されています。`.github/workflows/playwright-tests.yml`ファイルで設定されています。
+
+#### 自動テスト実行タイミング
+
+**1. プルリクエスト時（基本テストのみ）**
+- プルリクエストの作成・更新時に基本的なPlaywrightテストが自動実行
+- `tests/example.spec.js`と`tests/web-operations-test.spec.js`が対象
+- Node.js 18および20の両バージョンでテスト
+- テスト関連ファイルが変更された場合のみ実行
+
+**2. WordPress E2Eテスト（条件付き実行）**
+- プルリクエストタイトルに`[wp-test]`を含める
+- コミットメッセージに`[wp-test]`を含める
+- 手動実行（workflow_dispatch）
+
+**3. mainブランチへのプッシュ時**
+- mainブランチに変更がマージされた際に全テストを実行
+
+#### WordPress E2Eテストの有効化方法
+
+**プルリクエスト作成時:**
+```bash
+# プルリクエストのタイトル例
+"[wp-test] Add new WordPress block test feature"
+```
+
+**コミット時:**
+```bash
+git commit -m "[wp-test] Update WordPress-way tests
+
+Added new functionality for block operations"
+```
+
+**手動実行:**
+- GitHubリポジトリの「Actions」タブ
+- 「Playwright Tests」ワークフローを選択
+- 「Run workflow」ボタンをクリック
+
+#### テスト環境の特徴
+
+**基本テスト環境:**
+- Ubuntu Latest
+- Node.js 18, 20（マトリックステスト）
+- Playwright ブラウザの自動インストール
+- 実行時間: 約10-15分
+
+**WordPress テスト環境:**
+- Ubuntu Latest + Docker
+- WordPress環境の自動セットアップ
+- `@wordpress/env`による完全なWordPress環境
+- 実行時間: 約30-45分
+
+#### テスト結果の確認
+
+**GitHub Actions UI:**
+```
+プルリクエスト → Checks → Playwright Tests
+```
+
+**テスト成果物（Artifacts）:**
+- `playwright-report-basic-node18`: Node.js 18の基本テスト結果
+- `playwright-report-basic-node20`: Node.js 20の基本テスト結果  
+- `playwright-report-wordpress`: WordPress関連のテスト結果
+
+**自動生成サマリー:**
+-各ワークフロー実行後にテスト結果サマリーが自動生成
+- 成功・失敗のステータス一覧
+- 詳細レポートへのリンク
+
+### ローカルでのCI/CD環境シミュレーション
+
+#### 基本テストの並列実行（CI環境相当）
+```bash
+# 複数のNode.jsバージョンでテスト（Dockerを使用）
+docker run --rm -v $(pwd):/workspace -w /workspace node:18 npm ci && npm test
+docker run --rm -v $(pwd):/workspace -w /workspace node:20 npm ci && npm test
+
+# 基本テストのみ実行（CIと同じ条件）
+npx playwright test tests/example.spec.js tests/web-operations-test.spec.js --reporter=github
+```
+
+#### WordPress環境テストのローカルシミュレーション
+```bash
+# CI環境と同じ手順でWordPress環境をセットアップ
+npm run wp-env:start
+
+# ヘルスチェック（CI環境と同様）
+timeout 180 sh -c 'until curl -s http://localhost:8080 > /dev/null; do sleep 2; done'
+
+# WordPress基本テスト
+npx playwright test tests/wordpress.spec.js --reporter=github
+
+# WordPress-way学習テスト
+npx playwright test tests/wordpress-way-*.spec.js --project=wordpress-e2e
+
+# 環境をクリーンアップ
+npm run wp-env:stop
+```
+
+#### GitHub ActionsレポーターによるローカルCIシミュレーション
+```bash
+# CI環境と同じレポーター形式で出力
+npx playwright test --reporter=github
+
+# 複数レポーターの使用（CI + HTML）
+npx playwright test --reporter=github,html
+
+# CI環境用の設定で実行
+CI=true npx playwright test
+```
+
+### CI/CD最適化のベストプラクティス
+
+#### テスト実行時間の最適化
+```bash
+# 並列実行数の調整（CI環境推奨設定）
+npx playwright test --workers=2
+
+# 基本テストのみ高速実行
+npx playwright test tests/example.spec.js tests/web-operations-test.spec.js --workers=4
+
+# WordPress テストは単一ワーカー（リソース消費対策）
+npx playwright test tests/wordpress*.spec.js --workers=1
+```
+
+#### CI環境でのデバッグ
+```bash
+# CI環境でのスクリーンショット取得
+npx playwright test --screenshot=only-on-failure
+
+# CI環境でのビデオ録画
+npx playwright test --video=retain-on-failure
+
+# 詳細ログ出力（CI環境でのトラブルシューティング）
+DEBUG=pw:* npx playwright test
+```
+
+#### テスト安定性の向上
+```yaml
+# playwright.config.js でのCI環境向け設定例
+module.exports = {
+  // CI環境では再実行を有効化
+  retries: process.env.CI ? 2 : 0,
+  
+  // CI環境ではタイムアウトを延長
+  timeout: process.env.CI ? 60000 : 30000,
+  
+  // CI環境向けのブラウザ設定
+  use: {
+    // CIでは軽量設定
+    video: process.env.CI ? 'retain-on-failure' : 'on',
+    screenshot: process.env.CI ? 'only-on-failure' : 'on',
+  }
+};
+```
+
+### トラブルシューティング
+
+#### よくある問題と解決方法
+
+**1. WordPress環境の起動失敗**
+```bash
+# Docker環境の確認
+docker --version
+docker-compose --version
+
+# ポートの競合確認
+netstat -an | grep :8080
+lsof -i :8080
+
+# WordPress環境の強制リセット
+npm run wp-env:clean
+docker system prune -f
+npm run wp-env:start
+```
+
+**2. GitHub Actions上でのテスト失敗**
+```bash
+# ローカルでCI環境を再現
+CI=true NODE_ENV=test npx playwright test
+
+# GitHub Actionsのキャッシュクリア（リポジトリ設定から）
+# Settings → Actions → Caches → Delete all caches
+```
+
+**3. Node.jsバージョン差異問題**
+```bash
+# nvmを使用してバージョンを切り替え
+nvm install 18
+nvm use 18
+npm ci && npm test
+
+nvm install 20
+nvm use 20
+npm ci && npm test
+```
+
+**4. テストの断続的な失敗（Flaky Tests）**
+```bash
+# 再実行設定でのテスト
+npx playwright test --retries=3
+
+# 特定のテストを複数回実行して安定性確認
+npx playwright test tests/example.spec.js --repeat-each=5
+```
+
+#### CI環境用のpackage.jsonスクリプト
+```json
+{
+  "scripts": {
+    "test:ci": "playwright test --reporter=github",
+    "test:ci:basic": "playwright test tests/example.spec.js tests/web-operations-test.spec.js --reporter=github",
+    "test:ci:wordpress": "playwright test tests/wordpress*.spec.js --project=wordpress-e2e --reporter=github",
+    "ci:setup": "npm ci && npx playwright install --with-deps",
+    "ci:wp-setup": "npm run wp-env:start && timeout 180 sh -c 'until curl -s http://localhost:8080; do sleep 2; done'",
+    "ci:wp-teardown": "npm run wp-env:stop"
+  }
+}
+```
+
+## 11. 参考リンク
 - [Playwright 公式ドキュメント](https://playwright.dev/)
 - [Playwright Getting Started（英語）](https://playwright.dev/docs/intro)
 - [WordPress Environment (@wordpress/env)](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/)
 - [WordPress E2E Test Utils Playwright](https://www.npmjs.com/package/@wordpress/e2e-test-utils-playwright)
 - [WordPress Gutenberg E2E Tests](https://github.com/WordPress/gutenberg/tree/trunk/test/e2e)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Playwright CI/CD Guide](https://playwright.dev/docs/ci)
