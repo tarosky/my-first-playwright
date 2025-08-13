@@ -10,8 +10,8 @@
     "wp-env:reset": "wp-env clean && wp-env start",
     "test:wordpress": "playwright test tests/wordpress.spec.js"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "fumikito <ftakahashi@tarosky.co.jp>",
+  "license": "GPL-3.0-and-later",
   "description": "",
   "devDependencies": {
     "@playwright/test": "^1.54.2",
