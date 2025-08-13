@@ -1,0 +1,15 @@
+{
+  "core": "WordPress/WordPress",
+  "phpVersion": "8.1",
+  "plugins": [],
+  "themes": [],
+  "port": 8080,
+  "testsPort": 8081,
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_LOG": true
+  },
+  "mappings": {
+    "wp-content/uploads": "./uploads"
+  }
+}

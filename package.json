@@ -1,0 +1,21 @@
+{
+  "name": "my-first-playwright",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "wp-env:start": "wp-env start",
+    "wp-env:stop": "wp-env stop",
+    "wp-env:clean": "wp-env clean",
+    "wp-env:reset": "wp-env clean && wp-env start",
+    "test:wordpress": "playwright test tests/wordpress.spec.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@wordpress/e2e-test-utils-playwright": "^1.28.0",
+    "@wordpress/env": "^10.28.0"
+  }
+}
