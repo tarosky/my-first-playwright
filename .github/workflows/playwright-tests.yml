@@ -55,8 +55,7 @@ jobs:
     - name: Run basic Playwright tests (non-WordPress)
       run: |
         npx playwright test tests/example.spec.js tests/web-operations-test.spec.js \
-          --reporter=github \
-          --output-dir=test-results-basic
+          --reporter=github
       continue-on-error: false
       env:
         CI: true
@@ -66,7 +65,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: playwright-report-basic-node${{ matrix.node-version }}
-        path: test-results-basic/
+        path: |
+          test-results/
+          playwright-report/
         retention-days: 30
 
   # WordPress E2Eテストは別ジョブで実行（時間がかかるため）
@@ -107,20 +108,21 @@ jobs:
     - name: Run WordPress E2E tests
       run: |
         npx playwright test tests/wordpress.spec.js \
-          --reporter=github \
-          --output-dir=test-results-wordpress
+          --reporter=github
       env:
         # WordPress環境用の設定
         WP_ENV_CORE: WordPress/WordPress#master
+        CI: true
 
     - name: Run WordPress-way learning tests
       if: always()
       run: |
         npx playwright test tests/wordpress-way-*.spec.js \
           --reporter=github \
-          --output-dir=test-results-wordpress-way \
           --project=wordpress-e2e
       continue-on-error: true
+      env:
+        CI: true
 
     - name: Stop WordPress environment
       if: always()
@@ -132,8 +134,8 @@ jobs:
       with:
         name: playwright-report-wordpress
         path: |
-          test-results-wordpress/
-          test-results-wordpress-way/
+          test-results/
+          playwright-report/
         retention-days: 30
 
   # テスト結果のサマリーレポート作成
