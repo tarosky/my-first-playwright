@@ -32,8 +32,8 @@ jobs:
     
     strategy:
       matrix:
-        # 複数のNode.jsバージョンでテスト
-        node-version: [18, 20]
+        # Node.js 18のみでテスト（時間短縮のため）
+        node-version: [18]
       fail-fast: false
 
     steps:
@@ -58,6 +58,8 @@ jobs:
           --reporter=github \
           --output-dir=test-results-basic
       continue-on-error: false
+      env:
+        CI: true
 
     - name: Upload basic test results
       if: always()

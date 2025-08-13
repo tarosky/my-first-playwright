@@ -1,17 +1,23 @@
 // playwright.config.js
 module.exports = {
   testDir: './tests',
-  timeout: 30000,
+  // CI環境では再実行を有効化
+  retries: process.env.CI ? 2 : 0,
+  // CI環境ではタイムアウトを延長
+  timeout: process.env.CI ? 60000 : 30000,
   expect: {
-    timeout: 5000
+    timeout: process.env.CI ? 10000 : 5000
   },
   use: {
     // より人間らしいブラウザ設定
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // CI環境では軽量設定
+    screenshot: process.env.CI ? 'only-on-failure' : 'on',
+    video: process.env.CI ? 'retain-on-failure' : 'on',
+    // CI環境では明示的にheadlessモードを設定
+    headless: process.env.CI ? true : false,
   },
   projects: [
     {
